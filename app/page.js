@@ -29,7 +29,7 @@ function nextNDates(n) {
 
 export default function Page() {
   const [step, setStep] = useState(0);
-  const [productId, setProductId] = useState(null);
+  const [productIds, setProductIds] = useState([]);
   const [addonIds, setAddonIds] = useState([]);
   const [date, setDate] = useState(nextNDates(14)[1]);
   const [slots, setSlots] = useState(null);
@@ -116,19 +116,18 @@ export default function Page() {
   const dateOptions = useMemo(() => nextNDates(21), []);
 
   const price = useMemo(() => {
-    const p = PRODUCTS.find((x) => x.id === productId);
-    if (!p) return 0;
-    return p.price + addonIds.reduce((s, id) => s + (ADDONS.find((a) => a.id === id)?.price || 0), 0);
-  }, [productId, addonIds]);
+    const productTotal = productIds.reduce((s, id) => s + (PRODUCTS.find((p) => p.id === id)?.price || 0), 0);
+    return productTotal + addonIds.reduce((s, id) => s + (ADDONS.find((a) => a.id === id)?.price || 0), 0);
+  }, [productIds, addonIds]);
 
   useEffect(() => {
-    if (step !== 3 || !productId || !form.propertyAddress) return;
+    if (step !== 3 || !productIds.length || !form.propertyAddress) return;
     setLoadingSlots(true);
     setSlotError(null);
     setSelectedSlot(null);
     const params = new URLSearchParams({
       date,
-      product: productId,
+      products: productIds.join(","),
       addons: addonIds.join(","),
       address: form.propertyAddress,
     });
@@ -140,7 +139,11 @@ export default function Page() {
       })
       .catch((e) => setSlotError(String(e)))
       .finally(() => setLoadingSlots(false));
-  }, [step, date, productId, addonIds, form.propertyAddress]);
+  }, [step, date, productIds, addonIds, form.propertyAddress]);
+
+  function toggleProduct(id) {
+    setProductIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+  }
 
   function toggleAddon(id) {
     setAddonIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
@@ -154,7 +157,7 @@ export default function Page() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          productId,
+          productIds,
           addonIds,
           start: selectedSlot.start,
           ...form,
@@ -217,12 +220,13 @@ export default function Page() {
       <section className="px-6 pb-24 max-w-3xl mx-auto">
         {step === 0 && (
           <div className="grid gap-4">
+            <p className="text-slate text-sm -mb-2">Select one or more — packages can be combined, e.g. photos and video together.</p>
             {PRODUCTS.map((p) => (
               <button
                 key={p.id}
-                onClick={() => setProductId(p.id)}
+                onClick={() => toggleProduct(p.id)}
                 className={`focus-ring text-left border rounded-lg p-5 transition ${
-                  productId === p.id ? "border-rust bg-rust/5" : "border-ink/15 hover:border-ink/30"
+                  productIds.includes(p.id) ? "border-rust bg-rust/5" : "border-ink/15 hover:border-ink/30"
                 }`}
               >
                 <div className="flex items-baseline justify-between gap-4">
@@ -233,9 +237,10 @@ export default function Page() {
                 <p className="font-mono text-xs text-ink/40 mt-2">{p.durationMinutes} min on site</p>
               </button>
             ))}
-            <div className="flex justify-end mt-2">
+            <div className="flex justify-between mt-2 items-center">
+              <span className="font-mono text-sm text-ink/60">{productIds.length ? `Total: ${money(price)}` : ""}</span>
               <button
-                disabled={!productId}
+                disabled={!productIds.length}
                 onClick={() => setStep(1)}
                 className="focus-ring bg-ink text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
               >

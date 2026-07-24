@@ -4,27 +4,28 @@ import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@
 
 export async function POST(request) {
   const body = await request.json();
-  const { productId, addonIds = [], start, propertyAddress, clientName, clientEmail, clientPhone, notes } = body;
+  const { productIds = [], addonIds = [], start, propertyAddress, clientName, clientEmail, clientPhone, notes } = body;
 
-  if (!productId || !start || !clientEmail || !clientName || !clientPhone || !propertyAddress) {
+  if (!productIds.length || !start || !clientEmail || !clientName || !clientPhone || !propertyAddress) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const product = getProduct(productId);
-  if (!product) {
-    return NextResponse.json({ error: "Unknown product" }, { status: 400 });
+  const products = productIds.map(getProduct).filter(Boolean);
+  if (!products.length) {
+    return NextResponse.json({ error: "Unknown package" }, { status: 400 });
   }
 
-  const duration = computeDuration(productId, addonIds);
-  const price = computePrice(productId, addonIds);
+  const duration = computeDuration(productIds, addonIds);
+  const price = computePrice(productIds, addonIds);
   const startISO = new Date(start).toISOString();
   const endISO = new Date(new Date(start).getTime() + duration * 60000).toISOString();
 
   const addonNames = addonIds.map((id) => getAddon(id)?.name).filter(Boolean);
+  const productNames = products.map((p) => p.name);
 
   const summary = `Photo Shoot: ${propertyAddress} (${clientName})`;
   const description = [
-    `Package: ${product.name}`,
+    `Packages: ${productNames.join(", ")}`,
     addonNames.length ? `Add-ons: ${addonNames.join(", ")}` : null,
     `Estimated total: $${price}`,
     `Property: ${propertyAddress}`,
@@ -52,7 +53,7 @@ export async function POST(request) {
         clientName,
         clientEmail,
         clientPhone || "",
-        product.name,
+        productNames.join(", "),
         addonNames.join(", "),
         price,
         startISO,

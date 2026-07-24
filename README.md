@@ -188,6 +188,33 @@ widget, which Google blocks for any API key created after March 2025).
 Without this env var set, it's just a plain text field and everything
 else still works.
 
+## Check Kato's calendar too
+
+Every booking now requires both you and Kato to be free — a slot won't be
+offered unless neither of you has a conflict. This needs one thing from
+Kato (no new API setup on your end, same Google credentials you already
+have):
+
+1. Kato opens **Google Calendar → Settings** (gear icon) → clicks on his
+   calendar under "Settings for my calendars" in the left sidebar.
+2. Under **"Share with specific people or groups"** → **Add people** →
+   enters your connected Gmail (`jeff@yellowcardinalmedia.com` or
+   whichever account you connected in step 4 above).
+3. Permission level: **"See only free/busy (hide details)"** is enough —
+   he doesn't need to share what the events actually are, just when he's
+   busy.
+4. Save.
+
+That's it — nothing to redeploy, no new key. Your app checks his free/busy
+status live on every availability search. If he hasn't shared it yet
+(or shares it later and it hasn't propagated), the app quietly falls back
+to just checking your own calendar rather than erroring out — so the
+site keeps working either way, it just won't factor in his schedule
+until he shares it.
+
+To add or remove people from this requirement later, edit
+`requiredFreeCalendars` in `lib/config.js`.
+
 ## Things worth doing next (not included yet)
 
 - **Payments**: add Stripe Checkout before the final confirm step if you

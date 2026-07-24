@@ -1,29 +1,33 @@
 import { NextResponse } from "next/server";
-import { listBusyEvents } from "@/lib/google";
+import { listBusyEvents, listExternalBusyBlocks } from "@/lib/google";
 import { generateSlotsForDay } from "@/lib/slots";
 import { computeDuration, BUSINESS } from "@/lib/config";
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date"); // YYYY-MM-DD
-  const productId = searchParams.get("product");
+  const productIds = (searchParams.get("products") || "").split(",").filter(Boolean);
   const addonIds = (searchParams.get("addons") || "").split(",").filter(Boolean);
   const address = searchParams.get("address"); // required for drive-time-aware buffering
 
-  if (!date || !productId || !address) {
-    return NextResponse.json({ error: "Missing date, product, or address" }, { status: 400 });
+  if (!date || !productIds.length || !address) {
+    return NextResponse.json({ error: "Missing date, package, or address" }, { status: 400 });
   }
 
-  const duration = computeDuration(productId, addonIds);
+  const duration = computeDuration(productIds, addonIds);
   if (!duration) {
-    return NextResponse.json({ error: "Unknown product" }, { status: 400 });
+    return NextResponse.json({ error: "Unknown package" }, { status: 400 });
   }
 
   const timeMin = new Date(`${date}T00:00:00`).toISOString();
   const timeMax = new Date(`${date}T23:59:59`).toISOString();
 
   try {
-    const busyEvents = await listBusyEvents(timeMin, timeMax);
+    const [ownEvents, externalBlocks] = await Promise.all([
+      listBusyEvents(timeMin, timeMax),
+      listExternalBusyBlocks(BUSINESS.requiredFreeCalendars, timeMin, timeMax),
+    ]);
+    const busyEvents = [...ownEvents, ...externalBlocks];
     const slots = await generateSlotsForDay(date, duration, busyEvents, address);
     return NextResponse.json({ date, durationMinutes: duration, timezone: BUSINESS.timezone, slots });
   } catch (err) {
