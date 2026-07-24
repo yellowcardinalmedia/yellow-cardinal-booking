@@ -182,9 +182,11 @@ Same Google Maps platform as drive-time buffering, one more API to enable:
 4. Under "API restrictions" limit it to **Places API** only.
 5. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to that key's value and redeploy.
 
-Once set, the property address field turns into a live autocomplete —
-type a few letters, pick from the dropdown. Without this set, it's just
-a plain text field and everything else still works.
+Once set, the property address field shows a live dropdown of suggestions
+as you type (Google's current Autocomplete Suggestion API — not the older
+widget, which Google blocks for any API key created after March 2025).
+Without this env var set, it's just a plain text field and everything
+else still works.
 
 ## Things worth doing next (not included yet)
 

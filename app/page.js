@@ -46,43 +46,72 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState(null);
-  const addressInputRef = useRef(null);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const sessionTokenRef = useRef(null);
+  const placesLibRef = useRef(null);
 
-  // Load Google Places Autocomplete on the property address field, if a
-  // browser-side Maps key is configured (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).
-  // Without it, the field just works as a plain text input.
+  // Address autocomplete using Google's current Places API (AutocompleteSuggestion).
+  // Note: the older google.maps.places.Autocomplete widget is blocked for any
+  // API key created after March 2025, so this uses the current replacement
+  // and renders our own dropdown to keep the existing input styling.
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!key || step !== 2) return;
 
-    function initAutocomplete() {
-      if (!addressInputRef.current || !window.google?.maps?.places) return;
-      const autocomplete = new window.google.maps.places.Autocomplete(addressInputRef.current, {
-        types: ["address"],
-        componentRestrictions: { country: "us" },
-        fields: ["formatted_address"],
-      });
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace();
-        if (place.formatted_address) {
-          setForm((f) => ({ ...f, propertyAddress: place.formatted_address }));
-        }
-      });
+    async function loadPlacesLib() {
+      if (placesLibRef.current) return placesLibRef.current;
+      if (!window.google?.maps?.importLibrary) {
+        await new Promise((resolve) => {
+          if (document.getElementById("gmaps-script")) {
+            document.getElementById("gmaps-script").addEventListener("load", resolve);
+            return;
+          }
+          const script = document.createElement("script");
+          script.id = "gmaps-script";
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&loading=async&v=weekly`;
+          script.async = true;
+          script.onload = resolve;
+          document.head.appendChild(script);
+        });
+      }
+      const lib = await window.google.maps.importLibrary("places");
+      placesLibRef.current = lib;
+      return lib;
     }
-
-    if (window.google?.maps?.places) {
-      initAutocomplete();
-    } else if (!document.getElementById("gmaps-script")) {
-      const script = document.createElement("script");
-      script.id = "gmaps-script";
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
-      script.async = true;
-      script.onload = initAutocomplete;
-      document.head.appendChild(script);
-    } else {
-      document.getElementById("gmaps-script").addEventListener("load", initAutocomplete);
-    }
+    loadPlacesLib();
   }, [step]);
+
+  async function handleAddressInput(value) {
+    setForm((f) => ({ ...f, propertyAddress: value }));
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key || !value || value.length < 4) {
+      setAddressSuggestions([]);
+      return;
+    }
+    const lib = placesLibRef.current || (await window.google?.maps?.importLibrary?.("places"));
+    if (!lib) return;
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = new lib.AutocompleteSessionToken();
+    }
+    try {
+      const { suggestions } = await lib.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input: value,
+        sessionToken: sessionTokenRef.current,
+        includedRegionCodes: ["us"],
+      });
+      setAddressSuggestions(suggestions || []);
+    } catch {
+      setAddressSuggestions([]); // Places not configured yet — field still works as plain text
+    }
+  }
+
+  async function selectAddressSuggestion(suggestion) {
+    const place = suggestion.placePrediction.toPlace();
+    await place.fetchFields({ fields: ["formattedAddress"] });
+    setForm((f) => ({ ...f, propertyAddress: place.formattedAddress || f.propertyAddress }));
+    setAddressSuggestions([]);
+    sessionTokenRef.current = null; // start a fresh session for the next search
+  }
 
   const dateOptions = useMemo(() => nextNDates(21), []);
 
@@ -260,17 +289,32 @@ export default function Page() {
             <p className="text-slate text-sm -mb-2">
               We need the property address before showing times, so shoots can be scheduled with realistic drive time between them.
             </p>
-            <label className="block">
+            <label className="block relative">
               <span className="text-sm text-slate">Property address</span>
               <input
                 required
-                ref={addressInputRef}
                 type="text"
+                autoComplete="off"
                 value={form.propertyAddress}
-                onChange={(e) => setForm((f) => ({ ...f, propertyAddress: e.target.value }))}
+                onChange={(e) => handleAddressInput(e.target.value)}
                 className="focus-ring mt-1 w-full border border-ink/20 rounded-lg px-4 py-3 bg-white/60"
                 placeholder="Start typing an address…"
               />
+              {addressSuggestions.length > 0 && (
+                <ul className="absolute z-10 left-0 right-0 mt-1 bg-white border border-ink/15 rounded-lg shadow-sm overflow-hidden">
+                  {addressSuggestions.map((s) => (
+                    <li key={s.placePrediction.placeId}>
+                      <button
+                        type="button"
+                        onClick={() => selectAddressSuggestion(s)}
+                        className="focus-ring w-full text-left px-4 py-2 text-sm hover:bg-haze/50"
+                      >
+                        {s.placePrediction.text.text}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </label>
             {[
               ["clientName", "Your name", "text"],
