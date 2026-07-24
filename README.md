@@ -172,6 +172,20 @@ day* — it doesn't currently account for your own starting location
 before the first shoot of the day. If that matters, set your business
 hours' start time later to build in that first commute.
 
+## Address autocomplete
+
+Same Google Maps platform as drive-time buffering, one more API to enable:
+
+1. Google Cloud Console → APIs & Services → Library → enable **Places API**.
+2. Credentials → Create Credentials → **API key** (a *second*, separate key from the drive-time one, since this one runs in the customer's browser and needs to be restricted differently).
+3. Click into the new key → under "Application restrictions" choose **Websites** → add your live domain (e.g. `https://booking.yellowcardinalmedia.com/*`). This stops anyone else from using your key on their own site.
+4. Under "API restrictions" limit it to **Places API** only.
+5. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to that key's value and redeploy.
+
+Once set, the property address field turns into a live autocomplete —
+type a few letters, pick from the dropdown. Without this set, it's just
+a plain text field and everything else still works.
+
 ## Things worth doing next (not included yet)
 
 - **Payments**: add Stripe Checkout before the final confirm step if you

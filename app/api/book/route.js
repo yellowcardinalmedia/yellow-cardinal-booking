@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createBookingEvent, appendBookingRow } from "@/lib/google";
-import { getProduct, getAddon, computeDuration, computePrice } from "@/lib/config";
+import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
 
 export async function POST(request) {
   const body = await request.json();
@@ -43,6 +43,7 @@ export async function POST(request) {
       attendeeEmail: clientEmail,
       attendeeName: clientName,
       location: propertyAddress,
+      extraAttendeeEmails: BUSINESS.notifyEmails,
     });
     try {
       await appendBookingRow([

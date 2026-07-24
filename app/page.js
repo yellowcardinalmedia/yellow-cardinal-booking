@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PRODUCTS, ADDONS } from "@/lib/config";
 
 const STEPS = ["Package", "Add-ons", "Property & contact", "Time"];
@@ -46,6 +46,43 @@ export default function Page() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
   const [submitError, setSubmitError] = useState(null);
+  const addressInputRef = useRef(null);
+
+  // Load Google Places Autocomplete on the property address field, if a
+  // browser-side Maps key is configured (NEXT_PUBLIC_GOOGLE_MAPS_API_KEY).
+  // Without it, the field just works as a plain text input.
+  useEffect(() => {
+    const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!key || step !== 2) return;
+
+    function initAutocomplete() {
+      if (!addressInputRef.current || !window.google?.maps?.places) return;
+      const autocomplete = new window.google.maps.places.Autocomplete(addressInputRef.current, {
+        types: ["address"],
+        componentRestrictions: { country: "us" },
+        fields: ["formatted_address"],
+      });
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (place.formatted_address) {
+          setForm((f) => ({ ...f, propertyAddress: place.formatted_address }));
+        }
+      });
+    }
+
+    if (window.google?.maps?.places) {
+      initAutocomplete();
+    } else if (!document.getElementById("gmaps-script")) {
+      const script = document.createElement("script");
+      script.id = "gmaps-script";
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${key}&libraries=places`;
+      script.async = true;
+      script.onload = initAutocomplete;
+      document.head.appendChild(script);
+    } else {
+      document.getElementById("gmaps-script").addEventListener("load", initAutocomplete);
+    }
+  }, [step]);
 
   const dateOptions = useMemo(() => nextNDates(21), []);
 
@@ -223,8 +260,19 @@ export default function Page() {
             <p className="text-slate text-sm -mb-2">
               We need the property address before showing times, so shoots can be scheduled with realistic drive time between them.
             </p>
+            <label className="block">
+              <span className="text-sm text-slate">Property address</span>
+              <input
+                required
+                ref={addressInputRef}
+                type="text"
+                value={form.propertyAddress}
+                onChange={(e) => setForm((f) => ({ ...f, propertyAddress: e.target.value }))}
+                className="focus-ring mt-1 w-full border border-ink/20 rounded-lg px-4 py-3 bg-white/60"
+                placeholder="Start typing an address…"
+              />
+            </label>
             {[
-              ["propertyAddress", "Property address", "text"],
               ["clientName", "Your name", "text"],
               ["clientEmail", "Email (invite sent here)", "email"],
               ["clientPhone", "Phone", "tel"],
