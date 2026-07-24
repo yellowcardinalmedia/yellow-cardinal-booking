@@ -179,11 +179,6 @@ export default function Page() {
           <p className="text-slate mb-6">
             A calendar invite is on its way to your inbox. Estimated total: <span className="font-mono">{money(result.price)}</span>.
           </p>
-          {result.htmlLink && (
-            <a href={result.htmlLink} target="_blank" rel="noreferrer" className="underline text-rust">
-              View the calendar event
-            </a>
-          )}
         </div>
       </main>
     );
@@ -346,7 +341,7 @@ export default function Page() {
                 Back
               </button>
               <button
-                disabled={!form.propertyAddress || !form.clientName || !form.clientEmail}
+                disabled={!form.propertyAddress || !form.clientName || !form.clientEmail || !form.clientPhone}
                 onClick={() => setStep(3)}
                 className="focus-ring bg-ink text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
               >

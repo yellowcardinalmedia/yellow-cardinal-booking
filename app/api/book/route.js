@@ -6,7 +6,7 @@ export async function POST(request) {
   const body = await request.json();
   const { productId, addonIds = [], start, propertyAddress, clientName, clientEmail, clientPhone, notes } = body;
 
-  if (!productId || !start || !clientEmail || !clientName || !propertyAddress) {
+  if (!productId || !start || !clientEmail || !clientName || !clientPhone || !propertyAddress) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
