@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createBookingEvent, appendBookingRow } from "@/lib/google";
+import { createBookingEvent, appendBookingRow, sendAlertEmail } from "@/lib/google";
 import { driveDistanceMiles } from "@/lib/maps";
 import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
 
@@ -29,7 +29,7 @@ export async function POST(request) {
   const productNames = products.map((p) => p.name);
 
   const summary = `Photo Shoot: ${propertyAddress} (${clientName})`;
-  const description = [
+  const detailLines = [
     `Packages: ${productNames.join(", ")}`,
     addonNames.length ? `Add-ons: ${addonNames.join(", ")}` : null,
     tripCharge ? `Trip charge: $${tripCharge} (${distanceMiles.toFixed(1)} mi from base)` : null,
@@ -37,9 +37,8 @@ export async function POST(request) {
     `Property: ${propertyAddress}`,
     `Client phone: ${clientPhone || "n/a"}`,
     notes ? `Notes: ${notes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ].filter(Boolean);
+  const description = detailLines.join("\n");
 
   try {
     const event = await createBookingEvent({
@@ -52,6 +51,7 @@ export async function POST(request) {
       location: propertyAddress,
       extraAttendeeEmails: BUSINESS.notifyEmails,
     });
+
     try {
       await appendBookingRow([
         new Date().toISOString(),
@@ -67,6 +67,27 @@ export async function POST(request) {
     } catch (sheetErr) {
       // Don't fail the booking if the sheet log fails — the calendar event is the source of truth.
       console.error("Sheet logging failed:", sheetErr.message);
+    }
+
+    try {
+      const when = new Date(startISO).toLocaleString("en-US", {
+        weekday: "long",
+        month: "long",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        timeZone: BUSINESS.timezone,
+      });
+      await sendAlertEmail({
+        to: "jeff@yellowcardinalmedia.com",
+        subject: `New booking: ${clientName} — ${when}`,
+        body: [`${clientName} just booked a shoot.`, "", `When: ${when}`, `Client email: ${clientEmail}`, ...detailLines].join(
+          "\n"
+        ),
+      });
+    } catch (alertErr) {
+      // Don't fail the booking if the alert email fails — the calendar event is the source of truth.
+      console.error("Alert email failed:", alertErr.message);
     }
 
     return NextResponse.json({ success: true, eventId: event.id, htmlLink: event.htmlLink, price, tripCharge });

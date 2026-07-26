@@ -91,17 +91,24 @@ under Settings → Domains.
    automatically, and it shows up on your calendar with the property
    address, package, and add-ons in the description.
 
-## 7. Log bookings to a Sheet + get notified
+## 7. Log bookings to a Sheet — plus a direct alert email
 
 Calendar events are already the source of truth, but a running list is
-useful for your own records, and Sheets gives you a free notification
-system too.
+useful for your own records.
 
 1. Enable the **Google Sheets API** in the same Google Cloud project (APIs & Services → Library → search "Google Sheets API" → Enable).
 2. Create a new Google Sheet, name the first tab `Bookings`, and add a header row: `Timestamp | Property | Client | Email | Phone | Package | Add-ons | Price | Shoot Time`.
 3. Copy the spreadsheet ID from its URL (`docs.google.com/spreadsheets/d/`**`THIS_PART`**`/edit`) into `SHEETS_SPREADSHEET_ID`.
-4. Reconnect: visit `/api/auth/google` again (the Sheets scope was added to the code) and update `GOOGLE_REFRESH_TOKEN` with the new token.
-5. In the Sheet itself: **Tools → Notification rules** → "Any changes are made" → "Email — right away." Now you get an email the instant a booking lands, with zero custom notification code.
+4. Reconnect: visit `/api/auth/google` again (a Gmail-send scope was added to the code, see below) and update `GOOGLE_REFRESH_TOKEN` with the new token.
+
+For getting notified the moment a booking lands, don't rely on Google
+Sheets' own "Notification rules" feature — in practice it's unreliable
+even when configured exactly right. Instead, the app sends a plain
+alert email directly (to `jeff@yellowcardinalmedia.com`, hardcoded in
+`app/api/book/route.js` — change it there if that address ever changes),
+using the same connected Google account, no third-party email service
+needed. This only needs the reconnect in step 4 above (adds Gmail-send
+permission) — nothing else to configure.
 
 ## 8. Embed on Squarespace
 
