@@ -215,6 +215,26 @@ until he shares it.
 To add or remove people from this requirement later, edit
 `requiredFreeCalendars` in `lib/config.js`.
 
+## Distance-based rules
+
+Both rules measure real driving distance from your home base
+(`BUSINESS.originAddress` in `lib/config.js`) to the property, using the
+same Google Maps key as drive-time buffering (`GOOGLE_MAPS_API_KEY`) — no
+extra setup if that's already configured. If the key isn't set, neither
+rule is enforced.
+
+- **Farther than `strictCloseDistanceMiles` (default 45 mi)**: the shoot
+  can't be booked with a start time that would run past closing. Closer
+  properties get the normal exception (can start right at closing and run
+  over); far ones can't — the whole shoot must fit within business hours.
+- **Farther than `tripChargeDistanceMiles` (default 50 mi)**: a flat
+  `tripChargeAmount` ($30 default) is added to the total automatically.
+  It shows up to the client before they confirm, and is baked into the
+  calendar event description, the Sheet log, and the final price — not
+  something you have to remember to add manually.
+
+Both thresholds and the charge amount are editable in `lib/config.js`.
+
 ## Things worth doing next (not included yet)
 
 - **Payments**: add Stripe Checkout before the final confirm step if you

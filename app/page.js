@@ -189,12 +189,9 @@ export default function Page() {
 
   return (
     <main className="min-h-screen">
-      <header className="border-b border-ink/10 px-6 py-6 flex items-center justify-between">
-        <div>
-          <p className="font-mono text-xs tracking-widest text-brass uppercase">Yellow Cardinal Media</p>
-          <h1 className="font-display text-2xl text-ink">Book a Shoot</h1>
-        </div>
-        <div className="font-mono text-xs text-slate hidden sm:block">EXP · f/8 · GOLDEN HOUR</div>
+      <header className="border-b border-ink/10 px-6 py-6">
+        <p className="font-mono text-xs tracking-widest text-brass uppercase">Yellow Cardinal Media</p>
+        <h1 className="font-display text-2xl text-ink">Book a Shoot</h1>
       </header>
 
       <nav className="px-6 py-5 flex items-center gap-3 flex-wrap">
@@ -405,17 +402,26 @@ export default function Page() {
 
             {submitError && <p className="text-rust text-sm mt-4">{submitError}</p>}
 
+            {slots?.tripCharge > 0 && (
+              <p className="text-slate text-sm mt-4 border border-brass/30 bg-brass/5 rounded-lg p-3">
+                This property is outside our standard service area — a ${slots.tripCharge} trip charge applies.
+              </p>
+            )}
+
             <div className="flex justify-between mt-6 items-center">
               <button onClick={() => setStep(2)} className="focus-ring text-sm text-slate underline">
                 Back
               </button>
-              <button
-                disabled={!selectedSlot || submitting}
-                onClick={submitBooking}
-                className="focus-ring bg-rust text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
-              >
-                {submitting ? "Booking…" : "Confirm booking"}
-              </button>
+              <div className="flex items-center gap-4">
+                <span className="font-mono text-sm text-ink/60">Total: {money(price + (slots?.tripCharge || 0))}</span>
+                <button
+                  disabled={!selectedSlot || submitting}
+                  onClick={submitBooking}
+                  className="focus-ring bg-rust text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
+                >
+                  {submitting ? "Booking…" : "Confirm booking"}
+                </button>
+              </div>
             </div>
           </div>
         )}
