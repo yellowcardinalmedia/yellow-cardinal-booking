@@ -3,11 +3,40 @@ import { createBookingEvent, appendBookingRow, sendAlertEmail } from "@/lib/goog
 import { driveDistanceMiles } from "@/lib/maps";
 import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
 
+const ACCESS_LABELS = {
+  lockbox: "Lockbox",
+  meet: "Meeting someone on-site",
+  code: "Door code / smart lock",
+  agent: "Agent will unlock remotely",
+  vacant: "Vacant, unlocked",
+  other: "Other",
+};
+
 export async function POST(request) {
   const body = await request.json();
-  const { productIds = [], addonIds = [], start, propertyAddress, clientName, clientEmail, clientPhone, notes } = body;
+  const {
+    productIds = [],
+    addonIds = [],
+    start,
+    propertyAddress,
+    clientName,
+    clientEmail,
+    clientPhone,
+    accessMethod,
+    accessDetails,
+    notes,
+  } = body;
 
-  if (!productIds.length || !start || !clientEmail || !clientName || !clientPhone || !propertyAddress) {
+  if (
+    !productIds.length ||
+    !start ||
+    !clientEmail ||
+    !clientName ||
+    !clientPhone ||
+    !propertyAddress ||
+    !accessMethod ||
+    (accessMethod !== "vacant" && !accessDetails)
+  ) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -27,14 +56,17 @@ export async function POST(request) {
 
   const addonNames = addonIds.map((id) => getAddon(id)?.name).filter(Boolean);
   const productNames = products.map((p) => p.name);
+  const accessLabel = ACCESS_LABELS[accessMethod] || accessMethod;
+  const accessLine = accessDetails ? `${accessLabel} — ${accessDetails}` : accessLabel;
 
-  const summary = `Photo Shoot: ${propertyAddress} (${clientName})`;
+  const summary = `${clientName} — Photo Shoot (${propertyAddress})`;
   const detailLines = [
     `Packages: ${productNames.join(", ")}`,
     addonNames.length ? `Add-ons: ${addonNames.join(", ")}` : null,
     tripCharge ? `Trip charge: $${tripCharge} (${distanceMiles.toFixed(1)} mi from base)` : null,
     `Estimated total: $${price}`,
     `Property: ${propertyAddress}`,
+    `Access: ${accessLine}`,
     `Client phone: ${clientPhone || "n/a"}`,
     notes ? `Notes: ${notes}` : null,
   ].filter(Boolean);
@@ -63,6 +95,7 @@ export async function POST(request) {
         addonNames.join(", ") + (tripCharge ? ` + $${tripCharge} trip charge` : ""),
         price,
         startISO,
+        accessLine,
       ]);
     } catch (sheetErr) {
       // Don't fail the booking if the sheet log fails — the calendar event is the source of truth.

@@ -41,6 +41,8 @@ export default function Page() {
     clientName: "",
     clientEmail: "",
     clientPhone: "",
+    accessMethod: "",
+    accessDetails: "",
     notes: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -330,7 +332,44 @@ export default function Page() {
               </label>
             ))}
             <label className="block">
-              <span className="text-sm text-slate">Notes (gate code, showing instructions, etc.)</span>
+              <span className="text-sm text-slate">How will we access the property?</span>
+              <select
+                required
+                value={form.accessMethod}
+                onChange={(e) => setForm((f) => ({ ...f, accessMethod: e.target.value, accessDetails: "" }))}
+                className="focus-ring mt-1 w-full border border-ink/20 rounded-lg px-4 py-3 bg-white/60"
+              >
+                <option value="" disabled>
+                  Select one…
+                </option>
+                <option value="lockbox">Lockbox</option>
+                <option value="meet">Meeting someone on-site</option>
+                <option value="code">Door code / smart lock</option>
+                <option value="agent">Agent will unlock remotely</option>
+                <option value="vacant">Vacant, unlocked</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            {form.accessMethod && form.accessMethod !== "vacant" && (
+              <label className="block">
+                <span className="text-sm text-slate">
+                  {form.accessMethod === "lockbox" && "Lockbox code"}
+                  {form.accessMethod === "code" && "Door code"}
+                  {form.accessMethod === "meet" && "Who we're meeting, and their phone number"}
+                  {form.accessMethod === "agent" && "Agent name and phone number"}
+                  {form.accessMethod === "other" && "Access details"}
+                </span>
+                <input
+                  required
+                  type="text"
+                  value={form.accessDetails}
+                  onChange={(e) => setForm((f) => ({ ...f, accessDetails: e.target.value }))}
+                  className="focus-ring mt-1 w-full border border-ink/20 rounded-lg px-4 py-3 bg-white/60"
+                />
+              </label>
+            )}
+            <label className="block">
+              <span className="text-sm text-slate">Notes (parking, pets, anything else)</span>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -343,7 +382,14 @@ export default function Page() {
                 Back
               </button>
               <button
-                disabled={!form.propertyAddress || !form.clientName || !form.clientEmail || !form.clientPhone}
+                disabled={
+                  !form.propertyAddress ||
+                  !form.clientName ||
+                  !form.clientEmail ||
+                  !form.clientPhone ||
+                  !form.accessMethod ||
+                  (form.accessMethod !== "vacant" && !form.accessDetails)
+                }
                 onClick={() => setStep(3)}
                 className="focus-ring bg-ink text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
               >
