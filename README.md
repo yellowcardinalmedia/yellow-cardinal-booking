@@ -3,7 +3,7 @@
 Client-facing scheduling app: pick a package, pick add-ons, pick a time, book.
 Every booking creates a real event on **your** Google Calendar and Google
 automatically emails the client a calendar invite (that's the "notification"
-— no separate email service needed).
+— no separate email service needed), plus a direct alert email to you.
 
 No database. Your Google Calendar is the source of truth for availability
 (existing events block those times) and for bookings (each booking is just
@@ -25,8 +25,8 @@ connect Google Calendar (step 2).
 You only do this once, for your own business Gmail account.
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) → create a new project (any name, e.g. "Shotlist Booking").
-2. **APIs & Services → Library** → enable **Google Calendar API**.
-3. **APIs & Services → OAuth consent screen**:
+2. **APIs & Services → Library** → enable **Google Calendar API**, **Google Sheets API**, and **Gmail API**.
+3. **APIs & Services → OAuth consent screen** (may show as "Google Auth Platform" → Audience/Clients in newer Cloud Console layouts):
    - User type: External (unless you have Google Workspace, then Internal is fine).
    - Fill in app name, your email. Add your own Gmail under "Test users" while the app is unpublished — this is fine, you never need to publish it since only you (the business owner) will ever authorize it.
 4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
@@ -50,14 +50,21 @@ var settings if deployed) and restart/redeploy.
 This is a one-time step. After this, customers booking on your site never
 see or touch Google at all — they just pick a time and get an email.
 
+If you ever add a new permission scope to the code (Sheets, Gmail send,
+etc.), you need to redo this step to get a refresh token that includes
+the new scope — the old one won't automatically pick up new permissions.
+
 ## 5. Customize your business
 
 Edit `lib/config.js`:
 - `PRODUCTS` — your packages, durations, prices
-- `ADDONS` — drone, video, 3D tour, floor plan, etc.
+- `ADDONS` — floor plan, custom home website, etc.
 - `BUSINESS.hours` — your working hours per day of week
 - `BUSINESS.timezone` — defaults to `America/Chicago`
-- `BUSINESS.bufferMinutesBetweenShoots` — drive time between listings
+- `BUSINESS.bufferMinutesBetweenShoots` — flat fallback buffer when drive time can't be calculated
+- `BUSINESS.notifyEmails` — who gets a calendar invite copy of every booking
+- `BUSINESS.requiredFreeCalendars` — who else must be free (e.g. Kato)
+- `BUSINESS.originAddress` and the distance-based rules (see below)
 
 ## 6. Deploy (get it live)
 
@@ -76,20 +83,22 @@ run against the production URL once it's deployed — you'll need to visit
 and add that production redirect URI to the OAuth client in step 2).
 Redeploy after adding env vars.
 
-Point your domain (e.g. `booking.yellowcardinalmedia.com`) at the Vercel project
-under Settings → Domains.
+Point your domain (e.g. `booking.yellowcardinalmedia.com`) at the Vercel
+project under Settings → Domains.
 
 ## How a booking works, end to end
 
-1. Client opens the site, picks a package + add-ons.
-2. Client picks a date; the app calls Google's free/busy API for your
-   calendar and only shows open slots (respecting your business hours,
-   buffer time, and existing events).
-3. Client enters their info and confirms.
-4. The app creates a Google Calendar event on your calendar with the
-   client as an attendee — Google sends them the invite email
-   automatically, and it shows up on your calendar with the property
-   address, package, and add-ons in the description.
+1. Client opens the site, picks package(s) + add-ons (packages can be combined).
+2. Client enters the property address, contact info, and how to access the
+   property (lockbox, meet on-site, door code, etc.).
+3. The app calls Google's calendar for your busy times (and Kato's, and
+   checks distance rules) and only shows open slots.
+4. Client picks a time and confirms.
+5. The app creates a Google Calendar event on your calendar with the
+   client (and anyone in `notifyEmails`) as attendees — Google sends
+   them the invite email automatically. A direct alert email also goes
+   to you. The booking is logged to your Sheet if configured. A cancel
+   link is embedded in the event description.
 
 ## 7. Log bookings to a Sheet — plus a direct alert email
 
@@ -99,7 +108,7 @@ useful for your own records.
 1. Enable the **Google Sheets API** in the same Google Cloud project (APIs & Services → Library → search "Google Sheets API" → Enable).
 2. Create a new Google Sheet, name the first tab `Bookings`, and add a header row: `Timestamp | Property | Client | Email | Phone | Package | Add-ons | Price | Shoot Time | Access`.
 3. Copy the spreadsheet ID from its URL (`docs.google.com/spreadsheets/d/`**`THIS_PART`**`/edit`) into `SHEETS_SPREADSHEET_ID`.
-4. Reconnect: visit `/api/auth/google` again (a Gmail-send scope was added to the code, see below) and update `GOOGLE_REFRESH_TOKEN` with the new token.
+4. Reconnect: visit `/api/auth/google` again (a Gmail-send scope was added to the code) and update `GOOGLE_REFRESH_TOKEN` with the new token.
 
 For getting notified the moment a booking lands, don't rely on Google
 Sheets' own "Notification rules" feature — in practice it's unreliable
@@ -116,12 +125,11 @@ Squarespace can't run this app itself (it needs a real backend for the
 Google Calendar calls), but it can embed the deployed version. Two options:
 
 **A. Full-page embed** — simplest, good if booking has its own page/URL on your site:
-- Add a **Code Block** on the page → paste:
 ```html
 <iframe src="https://booking.yellowcardinalmedia.com" style="width:100%;height:900px;border:0;" title="Book a shoot"></iframe>
 ```
 
-**B. Modal popup** — a "Book a shoot" button anywhere on your site opens the scheduler as an overlay, like the preview above:
+**B. Modal popup** — a "Book a shoot" button anywhere on your site opens the scheduler as an overlay:
 1. Squarespace → Settings → Advanced → Code Injection → paste into **Footer**:
 ```html
 <div id="ss-booking-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
@@ -138,7 +146,7 @@ Google Calendar calls), but it can embed the deployed version. Two options:
   });
 </script>
 ```
-2. On any button/text link in the Squarespace editor, give it the CSS class `open-booking-modal` (Squarespace lets you set custom classes on most block/button settings under "Custom CSS Class"). Clicking it now pops the scheduler open as a modal, exactly like the preview.
+2. On any button/text link in the Squarespace editor, give it the CSS class `open-booking-modal`.
 
 Swap `booking.yellowcardinalmedia.com` for your real deployed URL in both snippets.
 
@@ -152,102 +160,85 @@ day with nothing scheduled? Just add a normal calendar event for it.
 
 ## Drive-time buffering between shoots
 
-By default, back-to-back bookings only get a flat 30-minute gap
-(`BUSINESS.bufferMinutesBetweenShoots` in `lib/config.js`) — fine for
-shoots in the same neighborhood, not enough if the next one is 45 minutes
-away.
+The gap between back-to-back bookings is real drive time (Google's
+Distance Matrix API) plus a 10-minute pad — not a flat number — when
+`GOOGLE_MAPS_API_KEY` is set. Falls back to `BUSINESS.bufferMinutesBetweenShoots`
+otherwise.
 
-To make the buffer distance-aware:
+The closing hour (`BUSINESS.hours[...].end`) is the last allowed **start**
+time, not a hard finish deadline — a shoot booked right at close is
+allowed to run past it, unless the property is far enough away to trigger
+`strictCloseDistanceMiles` (see below), in which case it must fully finish
+by closing time instead.
 
-1. Google Cloud Console → APIs & Services → Library → enable **Distance Matrix API**.
-2. Credentials → Create Credentials → **API key**. Restrict it to the Distance Matrix API for safety.
-3. Set `GOOGLE_MAPS_API_KEY` in your environment.
-
-Once set, every time a client picks a date, the app looks at the shoots
-already booked that day, gets the real drive time between each property
-and the new one, and only opens up slots that leave enough room to
-actually get there (drive time + a 10-minute pad). A shoot 2 hours away
-won't be offered a slot right after one that just ended; a shoot 5
-minutes away can be booked much tighter.
-
-If `GOOGLE_MAPS_API_KEY` isn't set, or an address can't be geocoded, it
-falls back to the flat buffer for that gap — nothing breaks, it's just
-less precise.
-
-Note: this only accounts for drive time *between shoots on the same
-day* — it doesn't currently account for your own starting location
-before the first shoot of the day. If that matters, set your business
-hours' start time later to build in that first commute.
+Note: same-day-only — it doesn't currently account for your own starting
+location before the first shoot of the day.
 
 ## Address autocomplete
 
 Same Google Maps platform as drive-time buffering, one more API to enable:
 
 1. Google Cloud Console → APIs & Services → Library → enable **Places API**.
-2. Credentials → Create Credentials → **API key** (a *second*, separate key from the drive-time one, since this one runs in the customer's browser and needs to be restricted differently).
-3. Click into the new key → under "Application restrictions" choose **Websites** → add your live domain (e.g. `https://booking.yellowcardinalmedia.com/*`). This stops anyone else from using your key on their own site.
-4. Under "API restrictions" limit it to **Places API** only.
+2. Credentials → Create Credentials → **API key** (a *second*, separate key from the drive-time one, since this one runs in the customer's browser).
+3. Click into the new key → **Application restrictions** → **Websites** → add your live domain (e.g. `https://booking.yellowcardinalmedia.com/*`).
+4. **API restrictions** → limit to **Places API** only.
 5. Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` to that key's value and redeploy.
 
 Once set, the property address field shows a live dropdown of suggestions
 as you type (Google's current Autocomplete Suggestion API — not the older
 widget, which Google blocks for any API key created after March 2025).
-Without this env var set, it's just a plain text field and everything
-else still works.
 
 ## Check Kato's calendar too
 
-Every booking now requires both you and Kato to be free — a slot won't be
-offered unless neither of you has a conflict. This needs one thing from
-Kato (no new API setup on your end, same Google credentials you already
-have):
+Every booking requires both you and Kato to be free. This needs one
+thing from Kato (no new API setup on your end):
 
-1. Kato opens **Google Calendar → Settings** (gear icon) → clicks on his
-   calendar under "Settings for my calendars" in the left sidebar.
-2. Under **"Share with specific people or groups"** → **Add people** →
-   enters your connected Gmail (`jeff@yellowcardinalmedia.com` or
-   whichever account you connected in step 4 above).
-3. Permission level: **"See only free/busy (hide details)"** is enough —
-   he doesn't need to share what the events actually are, just when he's
-   busy.
+1. Kato opens **Google Calendar → Settings** → clicks on his calendar
+   under "Settings for my calendars."
+2. **"Share with specific people or groups"** → **Add people** → enters
+   your connected Gmail.
+3. Permission level: **"See only free/busy (hide details)"** is enough.
 4. Save.
 
-That's it — nothing to redeploy, no new key. Your app checks his free/busy
-status live on every availability search. If he hasn't shared it yet
-(or shares it later and it hasn't propagated), the app quietly falls back
-to just checking your own calendar rather than erroring out — so the
-site keeps working either way, it just won't factor in his schedule
-until he shares it.
-
-To add or remove people from this requirement later, edit
-`requiredFreeCalendars` in `lib/config.js`.
+If he hasn't shared it yet, the app quietly falls back to just checking
+your own calendar rather than erroring out. Edit `requiredFreeCalendars`
+in `lib/config.js` to add/remove people.
 
 ## Distance-based rules
 
-Both rules measure real driving distance from your home base
-(`BUSINESS.originAddress` in `lib/config.js`) to the property, using the
-same Google Maps key as drive-time buffering (`GOOGLE_MAPS_API_KEY`) — no
-extra setup if that's already configured. If the key isn't set, neither
-rule is enforced.
+All measured by real driving distance, using `GOOGLE_MAPS_API_KEY`. If
+that key isn't set, none of these are enforced.
 
-- **Farther than `strictCloseDistanceMiles` (default 45 mi)**: the shoot
-  can't be booked with a start time that would run past closing. Closer
-  properties get the normal exception (can start right at closing and run
-  over); far ones can't — the whole shoot must fit within business hours.
-- **Farther than `tripChargeDistanceMiles` (default 50 mi)**: a flat
-  `tripChargeAmount` ($30 default) is added to the total automatically.
-  It shows up to the client before they confirm, and is baked into the
-  calendar event description, the Sheet log, and the final price — not
-  something you have to remember to add manually.
+- **`strictCloseDistanceMiles`** (default 45, measured from `originAddress`): properties farther than this can't book a shoot that would run past closing — the whole thing must fit within business hours, no exception.
+- **`tripChargeDistanceMiles`** (default 50, measured from `originAddress`): a flat `tripChargeAmount` ($30 default) gets added automatically — shown to the client before they confirm, baked into the event, Sheet log, and final price.
+- **`maxSameDayDistanceMiles`** (default 40, measured between the new property and every OTHER shoot already booked that same day — not from `originAddress`): if any existing shoot that day is farther than this from the new address, the entire day is excluded from availability. This is separate from drive-time buffering — buffering just spaces shoots out in time; this rule refuses same-day scheduling entirely past this distance, so the client has to pick a different day rather than the app trying to squeeze in a long cross-town drive with just a bigger time gap.
 
-Both thresholds and the charge amount are editable in `lib/config.js`.
+All thresholds and amounts are editable in `lib/config.js`.
+
+## Cancelling a booking
+
+Every booking's calendar event description includes a cancel link
+(`/cancel/[id]`) — the client can click it (from the calendar invite or
+anywhere they have the link) to see the booking details and cancel it
+themselves, no account or login needed. Cancelling deletes the calendar
+event with `sendUpdates: "all"`, which notifies everyone (client, you,
+Kato) and automatically frees up that time slot on every calendar
+involved — nothing else to do manually. You (or Kato) can also just
+open the event in Google Calendar directly and delete it the normal
+way; that has the same effect.
+
+The link uses a random, hard-to-guess event ID as its only "access
+control" — there's no password or login. That's an intentional
+trade-off for simplicity; anyone with the exact link can cancel that
+one booking, but the ID isn't discoverable or guessable.
 
 ## Things worth doing next (not included yet)
 
 - **Payments**: add Stripe Checkout before the final confirm step if you
   want deposits or full payment up front.
 - **SMS reminders**: Twilio is a common add-on once this is live.
-- **Cancellation/reschedule links**: currently clients would email/call you;
-  a self-serve cancel link is a natural next feature.
+- **Reschedule** (not just cancel): currently a client who wants a
+  different time has to cancel and rebook from scratch.
 - **Multiple photographers**: this version assumes one calendar/one
-  shooter; a team version would need a calendar per photographer.
+  shooter (plus Kato as a required-free check) — a full team version
+  would need a calendar per photographer and an assignment step.

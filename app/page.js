@@ -52,6 +52,13 @@ export default function Page() {
   const sessionTokenRef = useRef(null);
   const placesLibRef = useRef(null);
 
+  const dateOptions = useMemo(() => nextNDates(21), []);
+
+  const price = useMemo(() => {
+    const productTotal = productIds.reduce((s, id) => s + (PRODUCTS.find((p) => p.id === id)?.price || 0), 0);
+    return productTotal + addonIds.reduce((s, id) => s + (ADDONS.find((a) => a.id === id)?.price || 0), 0);
+  }, [productIds, addonIds]);
+
   // Address autocomplete using Google's current Places API (AutocompleteSuggestion).
   // Note: the older google.maps.places.Autocomplete widget is blocked for any
   // API key created after March 2025, so this uses the current replacement
@@ -115,13 +122,6 @@ export default function Page() {
     sessionTokenRef.current = null; // start a fresh session for the next search
   }
 
-  const dateOptions = useMemo(() => nextNDates(21), []);
-
-  const price = useMemo(() => {
-    const productTotal = productIds.reduce((s, id) => s + (PRODUCTS.find((p) => p.id === id)?.price || 0), 0);
-    return productTotal + addonIds.reduce((s, id) => s + (ADDONS.find((a) => a.id === id)?.price || 0), 0);
-  }, [productIds, addonIds]);
-
   useEffect(() => {
     if (step !== 3 || !productIds.length || !form.propertyAddress) return;
     setLoadingSlots(true);
@@ -184,6 +184,15 @@ export default function Page() {
           <p className="text-slate mb-6">
             A calendar invite is on its way to your inbox. Estimated total: <span className="font-mono">{money(result.price)}</span>.
           </p>
+          {result.cancelUrl && (
+            <p className="text-xs text-ink/40">
+              Need to cancel later?{" "}
+              <a href={result.cancelUrl} className="underline">
+                Use this link
+              </a>
+              .
+            </p>
+          )}
         </div>
       </main>
     );

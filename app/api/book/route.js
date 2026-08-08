@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { createBookingEvent, appendBookingRow, sendAlertEmail } from "@/lib/google";
 import { driveDistanceMiles } from "@/lib/maps";
 import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
@@ -59,6 +60,13 @@ export async function POST(request) {
   const accessLabel = ACCESS_LABELS[accessMethod] || accessMethod;
   const accessLine = accessDetails ? `${accessLabel} — ${accessDetails}` : accessLabel;
 
+  // Custom event ID, generated before the event exists, so the cancel link
+  // can be embedded in the event description itself (Calendar allows a
+  // caller-supplied ID: lowercase letters/digits/hyphens only).
+  const eventId = `booking-${randomUUID().replace(/-/g, "")}`;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://yellow-cardinal-booking.vercel.app";
+  const cancelUrl = `${siteUrl}/cancel/${eventId}`;
+
   const summary = `${clientName} — Photo Shoot (${propertyAddress})`;
   const detailLines = [
     `Packages: ${productNames.join(", ")}`,
@@ -70,10 +78,11 @@ export async function POST(request) {
     `Client phone: ${clientPhone || "n/a"}`,
     notes ? `Notes: ${notes}` : null,
   ].filter(Boolean);
-  const description = detailLines.join("\n");
+  const description = [...detailLines, "", `Need to cancel? ${cancelUrl}`].join("\n");
 
   try {
     const event = await createBookingEvent({
+      id: eventId,
       summary,
       description,
       startISO,
@@ -123,7 +132,7 @@ export async function POST(request) {
       console.error("Alert email failed:", alertErr.message);
     }
 
-    return NextResponse.json({ success: true, eventId: event.id, htmlLink: event.htmlLink, price, tripCharge });
+    return NextResponse.json({ success: true, eventId: event.id, htmlLink: event.htmlLink, price, tripCharge, cancelUrl });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
