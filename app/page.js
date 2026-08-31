@@ -74,8 +74,7 @@ export default function Page() {
         // window.google.maps.importLibrary synchronously, then lazily
         // fetches the real script the first time a library is requested.
         // Just loading the script URL directly and waiting for `onload`
-        // (what this used to do) does NOT define importLibrary — that
-        // was the bug causing "importLibrary is not a function".
+        // does NOT define importLibrary — that was a real bug here before.
         if (!window.__gmapsBootstrapped) {
           window.__gmapsBootstrapped = true;
           /* eslint-disable */
