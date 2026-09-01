@@ -61,9 +61,12 @@ export async function POST(request) {
   const accessLine = accessDetails ? `${accessLabel} — ${accessDetails}` : accessLabel;
 
   // Custom event ID, generated before the event exists, so the cancel link
-  // can be embedded in the event description itself (Calendar allows a
-  // caller-supplied ID: lowercase letters/digits/hyphens only).
-  const eventId = `booking-${randomUUID().replace(/-/g, "")}`;
+  // can be embedded in the event description itself.
+  // IMPORTANT: Google Calendar only accepts base32hex characters in a
+  // caller-supplied ID — digits 0-9 and lowercase a-v, nothing else.
+  // No hyphens, no uppercase. A hyphen here caused "Invalid resource id
+  // value" and failed every booking, so don't reintroduce one.
+  const eventId = `booking${randomUUID().replace(/-/g, "")}`;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://yellow-cardinal-booking.vercel.app";
   const cancelUrl = `${siteUrl}/cancel/${eventId}`;
 
