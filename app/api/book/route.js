@@ -1,17 +1,9 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { createBookingEvent, appendBookingRow, sendAlertEmail } from "@/lib/google";
+import { createPendingEvent, appendBookingRow, sendAlertEmail } from "@/lib/google";
 import { driveDistanceMiles } from "@/lib/maps";
 import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
-
-const ACCESS_LABELS = {
-  lockbox: "Lockbox",
-  meet: "Meeting someone on-site",
-  code: "Door code / smart lock",
-  agent: "Agent will unlock remotely",
-  vacant: "Vacant, unlocked",
-  other: "Other",
-};
+import { ACCESS_LABELS, formatWhen, siteUrl, buildDetailLines } from "@/lib/booking";
 
 export async function POST(request) {
   const body = await request.json();
@@ -60,42 +52,54 @@ export async function POST(request) {
   const accessLabel = ACCESS_LABELS[accessMethod] || accessMethod;
   const accessLine = accessDetails ? `${accessLabel} — ${accessDetails}` : accessLabel;
 
-  // Custom event ID, generated before the event exists, so the cancel link
-  // can be embedded in the event description itself.
+  // Custom event ID, generated before the event exists, so the approve and
+  // cancel links can be embedded in the event and emails up front.
   // IMPORTANT: Google Calendar only accepts base32hex characters in a
   // caller-supplied ID — digits 0-9 and lowercase a-v, nothing else.
   // No hyphens, no uppercase. A hyphen here caused "Invalid resource id
   // value" and failed every booking, so don't reintroduce one.
   const eventId = `booking${randomUUID().replace(/-/g, "")}`;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://yellow-cardinal-booking.vercel.app";
-  const cancelUrl = `${siteUrl}/cancel/${eventId}`;
+  const base = siteUrl();
+  const approveUrl = `${base}/approve/${eventId}`;
+  const cancelUrl = `${base}/cancel/${eventId}`;
 
-  const summary = `${clientName} — Photo Shoot (${propertyAddress})`;
-  const detailLines = [
-    `Packages: ${productNames.join(", ")}`,
-    addonNames.length ? `Add-ons: ${addonNames.join(", ")}` : null,
-    tripCharge ? `Trip charge: $${tripCharge} (${distanceMiles.toFixed(1)} mi from base)` : null,
-    `Estimated total: $${price}`,
-    `Property: ${propertyAddress}`,
-    `Access: ${accessLine}`,
-    `Client phone: ${clientPhone || "n/a"}`,
-    notes ? `Notes: ${notes}` : null,
-  ].filter(Boolean);
-  const description = [...detailLines, "", `Need to cancel? ${cancelUrl}`].join("\n");
+  const detailLines = buildDetailLines({
+    productNames,
+    addonNames,
+    tripCharge,
+    distanceMiles,
+    price,
+    propertyAddress,
+    accessLine,
+    clientName,
+    clientEmail,
+    clientPhone,
+    notes,
+  });
+  const when = formatWhen(startISO);
+
+  // The hold carries "PENDING" in its title so an unapproved request is
+  // obvious at a glance on the calendar.
+  const summary = `PENDING — ${clientName} — Photo Shoot (${propertyAddress})`;
+  const description = [
+    "NOT YET CONFIRMED — awaiting approval.",
+    "",
+    ...detailLines,
+    "",
+    `Accept or decline: ${approveUrl}`,
+  ].join("\n");
 
   try {
-    const event = await createBookingEvent({
+    const event = await createPendingEvent({
       id: eventId,
       summary,
       description,
       startISO,
       endISO,
-      attendeeEmail: clientEmail,
-      attendeeName: clientName,
       location: propertyAddress,
-      extraAttendeeEmails: BUSINESS.notifyEmails,
     });
 
+    // Log it as PENDING; the approve/decline step rewrites this status in place.
     try {
       await appendBookingRow([
         new Date().toISOString(),
@@ -108,34 +112,58 @@ export async function POST(request) {
         price,
         startISO,
         accessLine,
+        "PENDING",
+        eventId,
       ]);
     } catch (sheetErr) {
-      // Don't fail the booking if the sheet log fails — the calendar event is the source of truth.
+      // Don't fail the request if the sheet log fails — the calendar event is the source of truth.
       console.error("Sheet logging failed:", sheetErr.message);
     }
 
+    // Approvers get the decision link.
     try {
-      const when = new Date(startISO).toLocaleString("en-US", {
-        weekday: "long",
-        month: "long",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-        timeZone: BUSINESS.timezone,
-      });
       await sendAlertEmail({
-        to: "jeff@yellowcardinalmedia.com",
-        subject: `New booking: ${clientName} — ${when}`,
-        body: [`${clientName} just booked a shoot.`, "", `When: ${when}`, `Client email: ${clientEmail}`, ...detailLines].join(
-          "\n"
-        ),
+        to: BUSINESS.approverEmails,
+        subject: `ACTION NEEDED — shoot request: ${clientName}, ${when}`,
+        body: [
+          `${clientName} requested a shoot. It is NOT confirmed until someone accepts it.`,
+          "",
+          `When: ${when}`,
+          ...detailLines,
+          "",
+          `Accept or decline here: ${approveUrl}`,
+          "",
+          `The time is held on the calendar until then, so nobody else can take it. If nobody decides within ${BUSINESS.pendingHoldExpiryHours} hours the hold is released automatically and the slot reopens.`,
+        ].join("\n"),
       });
     } catch (alertErr) {
-      // Don't fail the booking if the alert email fails — the calendar event is the source of truth.
-      console.error("Alert email failed:", alertErr.message);
+      console.error("Approver email failed:", alertErr.message);
     }
 
-    return NextResponse.json({ success: true, eventId: event.id, htmlLink: event.htmlLink, price, tripCharge, cancelUrl });
+    // The client is told it's a request, not a confirmation.
+    try {
+      await sendAlertEmail({
+        to: clientEmail,
+        subject: `Request received — ${when}`,
+        body: [
+          `Hi ${clientName},`,
+          "",
+          `We've received your shoot request for ${propertyAddress} on ${when}.`,
+          "",
+          "This is not confirmed yet — we'll check our photographer's availability and send you a calendar invite once it's accepted. You'll usually hear back the same day.",
+          "",
+          ...detailLines,
+          "",
+          `Need to withdraw this request? ${cancelUrl}`,
+          "",
+          BUSINESS.name,
+        ].join("\n"),
+      });
+    } catch (alertErr) {
+      console.error("Client email failed:", alertErr.message);
+    }
+
+    return NextResponse.json({ success: true, pending: true, eventId: event.id, price, tripCharge, cancelUrl });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

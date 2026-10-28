@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { listBusyEvents, listExternalBusyBlocks } from "@/lib/google";
+import { listBusyEvents, listExternalBusyBlocks, releaseExpiredHolds } from "@/lib/google";
+import { expireHoldNotifications } from "@/lib/expiry";
 import { generateSlotsForDay } from "@/lib/slots";
 import { driveDistanceMiles } from "@/lib/maps";
 import { computeDuration, BUSINESS } from "@/lib/config";
@@ -24,8 +25,17 @@ export async function GET(request) {
   const timeMax = new Date(`${date}T23:59:59`).toISOString();
 
   try {
+    // Clear out any holds that aged past the expiry window before reading
+    // the calendar, so an abandoned request stops blocking this day.
+    try {
+      const released = await releaseExpiredHolds(timeMin, timeMax);
+      if (released.length) await expireHoldNotifications(released);
+    } catch (expiryErr) {
+      console.error("Expiry sweep failed:", expiryErr.message);
+    }
+
     const [ownEvents, externalBlocks, distanceMiles] = await Promise.all([
-      listBusyEvents(timeMin, timeMax),
+      listBusyEvents(timeMin, timeMax), // includes live PENDING holds, so they aren't double-booked
       listExternalBusyBlocks(BUSINESS.requiredFreeCalendars, timeMin, timeMax),
       driveDistanceMiles(BUSINESS.originAddress, address),
     ]);

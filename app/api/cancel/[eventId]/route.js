@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getBookingEvent, cancelBookingEvent } from "@/lib/google";
-import { BUSINESS } from "@/lib/config";
+import { getBookingEvent, cancelBookingEvent, updateBookingStatus } from "@/lib/google";
+import { formatWhen } from "@/lib/booking";
 
 export async function GET(request, { params }) {
   try {
@@ -8,15 +8,13 @@ export async function GET(request, { params }) {
     if (event.status === "cancelled") {
       return NextResponse.json({ cancelled: true });
     }
-    const when = new Date(event.start.dateTime).toLocaleString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-      timeZone: BUSINESS.timezone,
+    return NextResponse.json({
+      summary: (event.summary || "").replace(/^PENDING — /, ""),
+      when: formatWhen(event.start.dateTime),
+      // A still-pending request is "withdrawn" rather than "cancelled" —
+      // the wording on the page follows this.
+      pending: event.status === "tentative",
     });
-    return NextResponse.json({ summary: event.summary, when });
   } catch (err) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
@@ -25,6 +23,11 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   try {
     await cancelBookingEvent(params.eventId);
+    try {
+      await updateBookingStatus(params.eventId, "CANCELLED");
+    } catch (e) {
+      console.error("Sheet status update failed:", e.message);
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

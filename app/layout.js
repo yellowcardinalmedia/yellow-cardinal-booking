@@ -2,7 +2,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "Book a Shoot | Yellow Cardinal Media",
-  description: "Pick a time, get on the calendar for your listing shoot.",
+  description: "Request a time for your listing shoot.",
 };
 
 export default function RootLayout({ children }) {

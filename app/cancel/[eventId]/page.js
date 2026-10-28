@@ -34,6 +34,8 @@ export default function CancelPage({ params }) {
     }
   }
 
+  const noun = booking?.pending ? "request" : "booking";
+
   return (
     <main className="min-h-screen flex items-center justify-center px-6 bg-paper">
       <div className="max-w-md w-full text-center">
@@ -43,9 +45,9 @@ export default function CancelPage({ params }) {
 
         {!error && done && (
           <>
-            <h1 className="font-display text-3xl mb-3 text-ink">Booking cancelled</h1>
+            <h1 className="font-display text-3xl mb-3 text-ink">All set</h1>
             <p className="text-slate text-sm">
-              That time slot is now open again. If this was a mistake, just head back to the booking site to rebook.
+              That time slot is now open again. If this was a mistake, just head back to the booking site to start over.
             </p>
           </>
         )}
@@ -54,7 +56,9 @@ export default function CancelPage({ params }) {
 
         {!error && !done && booking && (
           <>
-            <h1 className="font-display text-3xl mb-3 text-ink">Cancel this booking?</h1>
+            <h1 className="font-display text-3xl mb-3 text-ink">
+              {booking.pending ? "Withdraw this request?" : "Cancel this booking?"}
+            </h1>
             <p className="text-slate text-sm mb-1">{booking.summary}</p>
             <p className="font-mono text-sm text-ink/60 mb-6">{booking.when}</p>
             <button
@@ -62,7 +66,7 @@ export default function CancelPage({ params }) {
               disabled={cancelling}
               className="focus-ring bg-rust text-paper px-6 py-3 rounded-full disabled:opacity-40 text-sm"
             >
-              {cancelling ? "Cancelling…" : "Yes, cancel this booking"}
+              {cancelling ? "Working…" : `Yes, ${booking.pending ? "withdraw" : "cancel"} this ${noun}`}
             </button>
           </>
         )}

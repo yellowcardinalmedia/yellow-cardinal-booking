@@ -202,16 +202,17 @@ export default function Page() {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
         <div className="max-w-md text-center">
-          <p className="font-mono text-xs tracking-widest text-brass uppercase mb-4">Frame 01 / Confirmed</p>
-          <h1 className="font-display text-4xl mb-4 text-ink">You're on the calendar.</h1>
+          <p className="font-mono text-xs tracking-widest text-brass uppercase mb-4">Frame 01 / Requested</p>
+          <h1 className="font-display text-4xl mb-4 text-ink">Request received.</h1>
           <p className="text-slate mb-6">
-            A calendar invite is on its way to your inbox. Estimated total: <span className="font-mono">{money(result.price)}</span>.
+            This time is being held for you. We'll confirm availability and email your calendar invite shortly — usually
+            the same day. Estimated total: <span className="font-mono">{money(result.price)}</span>.
           </p>
           {result.cancelUrl && (
             <p className="text-xs text-ink/40">
-              Need to cancel later?{" "}
+              Changed your mind?{" "}
               <a href={result.cancelUrl} className="underline">
-                Use this link
+                Withdraw this request
               </a>
               .
             </p>
@@ -486,7 +487,12 @@ export default function Page() {
               </p>
             )}
 
-            <div className="flex justify-between mt-6 items-center">
+            <p className="text-xs text-ink/40 mt-4">
+              Submitting holds this time while we confirm photographer availability. You'll get a calendar invite once
+              it's accepted.
+            </p>
+
+            <div className="flex justify-between mt-4 items-center">
               <button onClick={() => setStep(2)} className="focus-ring text-sm text-slate underline">
                 Back
               </button>
@@ -497,7 +503,7 @@ export default function Page() {
                   onClick={submitBooking}
                   className="focus-ring bg-rust text-paper px-6 py-3 rounded-full disabled:opacity-30 text-sm"
                 >
-                  {submitting ? "Booking…" : "Confirm booking"}
+                  {submitting ? "Sending…" : "Request this time"}
                 </button>
               </div>
             </div>
