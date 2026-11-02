@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { createPendingEvent, appendBookingRow, sendAlertEmail } from "@/lib/google";
+import { createPendingEvent, appendBookingRow, sendAlertEmail, findBookingConflict } from "@/lib/google";
 import { driveDistanceMiles } from "@/lib/maps";
 import { getProduct, getAddon, computeDuration, computePrice, BUSINESS } from "@/lib/config";
 import { ACCESS_LABELS, formatWhen, siteUrl, buildDetailLines } from "@/lib/booking";
@@ -90,6 +90,11 @@ export async function POST(request) {
   ].join("\n");
 
   try {
+    const conflict = await findBookingConflict(startISO, endISO, propertyAddress);
+    if (conflict) {
+      return NextResponse.json({ error: conflict }, { status: 409 });
+    }
+
     const event = await createPendingEvent({
       id: eventId,
       summary,
@@ -97,6 +102,7 @@ export async function POST(request) {
       startISO,
       endISO,
       location: propertyAddress,
+      approverEmails: BUSINESS.approverEmails.filter((e) => e !== BUSINESS.ownerEmail),
     });
 
     // Log it as PENDING; the approve/decline step rewrites this status in place.
@@ -121,9 +127,11 @@ export async function POST(request) {
     }
 
     // Approvers get the decision link.
+    // One email per approver, so a problem with one address can't block the other.
+    for (const approver of BUSINESS.approverEmails) {
     try {
       await sendAlertEmail({
-        to: BUSINESS.approverEmails,
+        to: approver,
         subject: `ACTION NEEDED — shoot request: ${clientName}, ${when}`,
         body: [
           `${clientName} requested a shoot. It is NOT confirmed until someone accepts it.`,
@@ -137,7 +145,8 @@ export async function POST(request) {
         ].join("\n"),
       });
     } catch (alertErr) {
-      console.error("Approver email failed:", alertErr.message);
+      console.error(`Approver email to ${approver} failed:`, alertErr.message);
+    }
     }
 
     // The client is told it's a request, not a confirmation.
