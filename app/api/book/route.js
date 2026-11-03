@@ -102,7 +102,6 @@ export async function POST(request) {
       startISO,
       endISO,
       location: propertyAddress,
-      approverEmails: BUSINESS.approverEmails.filter((e) => e !== BUSINESS.ownerEmail),
     });
 
     // Log it as PENDING; the approve/decline step rewrites this status in place.
