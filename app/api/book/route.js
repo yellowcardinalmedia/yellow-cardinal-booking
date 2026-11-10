@@ -78,6 +78,16 @@ export async function POST(request) {
   });
   const when = formatWhen(startISO);
 
+  // If Google's distance lookup failed (e.g. billing lapsed), the trip charge,
+  // far-property closing rule and same-day distance rule did NOT run. Never let
+  // that pass silently — flag it for the approvers and alert the owner.
+  const distanceUnverified = distanceMiles === null;
+  if (distanceUnverified) {
+    detailLines.unshift(
+      "⚠ DISTANCE NOT VERIFIED — the distance lookup failed, so the trip charge and distance rules were NOT applied. Check the distance from the home base before accepting."
+    );
+  }
+
   // The hold carries "PENDING" in its title so an unapproved request is
   // obvious at a glance on the calendar.
   const summary = `PENDING — ${clientName} — Photo Shoot (${propertyAddress})`;
@@ -131,7 +141,7 @@ export async function POST(request) {
     try {
       await sendAlertEmail({
         to: approver,
-        subject: `ACTION NEEDED — shoot request: ${clientName}, ${when}`,
+        subject: `ACTION NEEDED${distanceUnverified ? " (DISTANCE UNVERIFIED)" : ""} — shoot request: ${clientName}, ${when}`,
         body: [
           `${clientName} requested a shoot. It is NOT confirmed until someone accepts it.`,
           "",
